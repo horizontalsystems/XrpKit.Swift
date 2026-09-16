@@ -21,8 +21,8 @@ the public `Kit` API go through that spec first.
 - `Sources/XrpKit` is UI-agnostic: Combine for state publication; no UIKit or SwiftUI imports.
 - No third-party XRPL SDK. Signing uses `HsCryptoKit` (`Crypto.sign`: RFC 6979, low-S, DER);
   key derivation uses `HdWalletKit`. Dependencies are pinned with `exact:`.
-- Unit tests run offline against the xrpl.js binary-codec fixtures and the ripple-keypairs signing
-  vector; network tests live in a separate `XrpKitLiveTests` target and are never part of CI.
+- Tests run offline only: the xrpl.js binary-codec fixtures, the ripple-keypairs signing vector and
+  stubbed RPC. There is no live-network test target; testnet is exercised manually.
 - Never log transaction blobs, signatures, public keys, seeds or private keys.
 - Never commit secrets, mnemonic phrases, provider credentials or host-local paths.
 - Commit messages: plain descriptive sentences in the repository style, no attribution trailers.
