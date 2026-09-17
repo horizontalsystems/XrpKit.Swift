@@ -1,0 +1,30 @@
+import Foundation
+
+/// rippled returned `status: error`. `code` is the rippled error token, e.g. `actNotFound`.
+public struct RpcError: Error, Equatable {
+    public let code: String
+    public let message: String?
+
+    public init(code: String, message: String?) {
+        self.code = code
+        self.message = message
+    }
+}
+
+/// A response did not have the shape the kit expects. Treated as untrusted input.
+public struct InvalidResponse: Error, Equatable {
+    public let message: String
+
+    public init(_ message: String) {
+        self.message = message
+    }
+}
+
+/// Every endpoint failed, or the last one returned an unusable response.
+public struct NoEndpointAvailable: Error {
+    public let underlying: Error?
+
+    public init(underlying: Error?) {
+        self.underlying = underlying
+    }
+}

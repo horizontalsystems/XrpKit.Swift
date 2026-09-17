@@ -3,8 +3,9 @@
 XRP Ledger kit for iOS, in the style of the other Horizontal Systems `*Kit.Swift` libraries.
 Parity target: [`xrp-kit-android`](https://github.com/horizontalsystems/xrp-kit-android).
 
-Status: repository seed. Design lives in the Unstoppable Wallet iOS spec
-`docs/specs/2026-09-16-xrp-integration-design.md` (workstream B) until the first slice lands.
+Status: the kit is complete locally and untagged — crypto, canonical binary codec, secp256k1 signer, JSON-RPC provider with endpoint failover, sync (account, ledger, trust lines, history), GRDB storage, submission with node fallback and the public `Kit` facade, all covered by the offline test suite. Design of record: Unstoppable Wallet iOS spec `docs/specs/2026-09-16-xrp-integration-design.md` (workstream B).
+
+Test fixtures `Tests/XrpKitTests/Fixtures/*.json` come from [xrpl.js](https://github.com/XRPLF/xrpl.js) (ripple-binary-codec), ISC license.
 
 ## Planned scope
 
