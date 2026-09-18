@@ -1,8 +1,8 @@
 import Combine
 import Foundation
 
-/// Timer loop that drives sync cycles and follows reachability (SolanaKit `ApiSyncer`, Android
-/// `SyncTimer`). Background handling is the app's `pause()`/`resume()` only; the kit does not
+/// Timer loop that drives sync cycles and follows reachability (EvmKit `ApiRpcSyncer`, TronKit
+/// `SyncTimer`, Android `SyncTimer`). Background handling is the app's `pause()`/`resume()` only; the kit does not
 /// observe `UIApplication`.
 final class ApiSyncer {
     weak var delegate: IApiSyncerDelegate?
@@ -40,14 +40,12 @@ final class ApiSyncer {
 
     func start() {
         isStarted = true
-        connectionManager.start()
         handleUpdate(reachable: connectionManager.isConnected)
     }
 
     func stop() {
         isStarted = false
         isPaused = false
-        connectionManager.stop()
         state = .notReady(error: SyncError.notStarted)
         stopTimer()
     }

@@ -354,7 +354,7 @@ public extension Kit {
         let transactionStorage = try TransactionStorage(dbPool: dbPool, address: classic)
 
         let transactionSyncer = TransactionSyncer(address: classic, rpcApiProvider: rpcApiProvider, mainStorage: mainStorage, transactionStorage: transactionStorage)
-        let apiSyncer = ApiSyncer(connectionManager: ConnectionManager(), syncInterval: syncInterval)
+        let apiSyncer = ApiSyncer(connectionManager: ReachabilityManager(), syncInterval: syncInterval)
         let syncManager = SyncManager(address: classic, apiSyncer: apiSyncer, rpcApiProvider: rpcApiProvider, transactionSyncer: transactionSyncer, storage: mainStorage)
         let submitter = TransactionSubmitter(rpcApiProvider: rpcApiProvider, logger: logger)
         let transactionSender = TransactionSender(address: classic, rpcApiProvider: rpcApiProvider, submitter: submitter, storage: transactionStorage, transactionSyncer: transactionSyncer)

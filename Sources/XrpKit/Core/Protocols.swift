@@ -1,12 +1,12 @@
 import Combine
 import Foundation
 
+/// Reachability as the other kits see it: HsToolKit `ReachabilityManager` in production (EvmKit
+/// `ApiRpcSyncer`, TronKit `SyncTimer`), a stub in tests. The value is known synchronously at
+/// creation, so the first `start()` decides on the real status, not a placeholder.
 protocol IConnectionManager {
     var isConnected: Bool { get }
     var isConnectedPublisher: AnyPublisher<Bool, Never> { get }
-
-    func start()
-    func stop()
 }
 
 protocol IMainStorage {

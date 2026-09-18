@@ -28,3 +28,23 @@ public struct NoEndpointAvailable: Error {
         self.underlying = underlying
     }
 }
+
+// User-facing descriptions, worded as the Android kit's exception messages.
+
+extension RpcError: LocalizedError {
+    public var errorDescription: String? {
+        message.map { "\(code): \($0)" } ?? code
+    }
+}
+
+extension InvalidResponse: LocalizedError {
+    public var errorDescription: String? {
+        message
+    }
+}
+
+extension NoEndpointAvailable: LocalizedError {
+    public var errorDescription: String? {
+        underlying?.localizedDescription ?? "No endpoint available"
+    }
+}

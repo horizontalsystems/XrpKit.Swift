@@ -121,3 +121,14 @@ public enum SendError: Error, Equatable {
     /// The serialized memo exceeds the 1 KB the ledger accepts.
     case memoTooLong
 }
+
+extension SendError: LocalizedError {
+    public var errorDescription: String? {
+        switch self {
+        case .accountNotFound: return "Account is not activated"
+        case .signerMismatch: return "Signer does not match the kit address"
+        case let .rejected(engineResult, message): return message.map { "\(engineResult): \($0)" } ?? engineResult
+        case .memoTooLong: return "Memo exceeds the 1 KB the ledger accepts"
+        }
+    }
+}
