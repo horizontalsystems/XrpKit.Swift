@@ -127,7 +127,11 @@ extension TransactionStorage: ITransactionStorage {
                 arguments.append(contentsOf: [counterparty, counterparty] as [DatabaseValueConvertible])
             }
 
-            if let fromHash, let anchor = try Transaction.filter(Transaction.Columns.hash == fromHash).fetchOne(db) {
+            if let fromHash {
+                // an anchor no longer in the stored history means there is nothing older to page to
+                guard let anchor = try Transaction.filter(Transaction.Columns.hash == fromHash).fetchOne(db) else {
+                    return []
+                }
                 conditions.append("(\(Transaction.Columns.timestamp.name) < ? OR (\(Transaction.Columns.timestamp.name) = ? AND \(Transaction.Columns.hash.name) < ?))")
                 arguments.append(contentsOf: [anchor.timestamp, anchor.timestamp, anchor.hash] as [DatabaseValueConvertible])
             }

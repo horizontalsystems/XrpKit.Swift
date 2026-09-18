@@ -160,6 +160,16 @@ final class TransactionSyncerTests: XCTestCase {
         XCTAssertTrue(transactionStorage.pendingTransactions().isEmpty)
     }
 
+    // Paging from a hash that is no longer stored must not restart from the top: the list would
+    // show the newest page again under the oldest one.
+    func testPagingFromUnknownAnchorReturnsNothing() async throws {
+        transport.answer("account_tx", .ok(Fixtures.accountTxPage([Fixtures.payment(hash: "A", ledgerIndex: 900, date: 800_000_100), Fixtures.payment(hash: "B", ledgerIndex: 800, date: 800_000_000)])))
+        try await syncer.sync(validatedLedger: 1000, accountExists: true)
+
+        XCTAssertEqual(transactionStorage.transactions(tagQuery: TagQuery(), fromHash: "A", limit: 10).map(\.hash), ["B"])
+        XCTAssertTrue(transactionStorage.transactions(tagQuery: TagQuery(), fromHash: "GONE", limit: 10).isEmpty)
+    }
+
     func testTagQueryFiltersAndPaging() throws {
         let usd = Amount.issued(value: 5, currency: "USD", issuer: Fixtures.issuer)
         let records = [
