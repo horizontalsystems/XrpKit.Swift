@@ -329,6 +329,7 @@ public extension Kit {
         return (try AccountId.fromAddress(address).address, tag)
     }
 
+    /// A 3-character standard code or the 40-hex ledger form (Android `XrpKit.isValidCurrencyCode`).
     static func isValidCurrencyCode(_ code: String) -> Bool {
         CurrencyCodec.isValid(code)
     }
