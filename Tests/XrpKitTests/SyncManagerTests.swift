@@ -25,7 +25,7 @@ final class SyncManagerTests: XCTestCase {
         let transactionSyncer = TransactionSyncer(address: Fixtures.address, rpcApiProvider: provider, mainStorage: mainStorage, transactionStorage: transactionStorage)
         connection = StubConnectionManager(connected: true)
         let apiSyncer = ApiSyncer(connectionManager: connection, syncInterval: 60)
-        syncManager = SyncManager(address: Fixtures.address, apiSyncer: apiSyncer, rpcApiProvider: provider, transactionSyncer: transactionSyncer, storage: mainStorage)
+        syncManager = try SyncManager(address: Fixtures.address, apiSyncer: apiSyncer, rpcApiProvider: provider, transactionSyncer: transactionSyncer, storage: mainStorage)
     }
 
     override func tearDownWithError() throws {

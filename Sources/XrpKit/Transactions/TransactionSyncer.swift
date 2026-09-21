@@ -49,7 +49,7 @@ final class TransactionSyncer {
 
     func sync(validatedLedger: UInt32, accountExists: Bool) async throws {
         // initial sync shows Syncing; later incremental syncs keep the sticky Synced state
-        let state = mainStorage.transactionSyncState()
+        let state = try mainStorage.transactionSyncState()
         let initialSyncDone = state?.initialSyncDone ?? false
         if !initialSyncDone {
             syncState = .syncing(progress: nil)
@@ -98,7 +98,7 @@ final class TransactionSyncer {
         var stored = [Transaction]()
         // resume below the oldest validated transaction already stored; the boundary ledger is
         // fetched again and de-duplicated by hash
-        var ledgerIndexMax = transactionStorage.oldestValidatedTransaction()?.ledgerIndex ?? startLedger
+        var ledgerIndexMax = try transactionStorage.oldestValidatedTransaction()?.ledgerIndex ?? startLedger
         var marker: Any?
         var pages = 0
 
@@ -145,7 +145,7 @@ final class TransactionSyncer {
     private func expirePending(validatedLedger: UInt32) async throws -> [Transaction] {
         var expired = [Transaction]()
 
-        for pending in transactionStorage.pendingTransactions() {
+        for pending in try transactionStorage.pendingTransactions() {
             guard let last = pending.lastLedgerSequence, validatedLedger > last else {
                 continue
             }

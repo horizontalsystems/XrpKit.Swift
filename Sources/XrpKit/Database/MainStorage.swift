@@ -58,8 +58,8 @@ final class MainStorage {
 }
 
 extension MainStorage: IMainStorage {
-    func accountState() -> AccountState? {
-        try! dbPool.read { db in
+    func accountState() throws -> AccountState? {
+        try dbPool.read { db in
             try AccountState.fetchOne(db)
         }
     }
@@ -70,8 +70,8 @@ extension MainStorage: IMainStorage {
         }
     }
 
-    func ledgerState() -> LedgerState? {
-        try! dbPool.read { db in
+    func ledgerState() throws -> LedgerState? {
+        try dbPool.read { db in
             try LedgerState.fetchOne(db)
         }
     }
@@ -82,8 +82,8 @@ extension MainStorage: IMainStorage {
         }
     }
 
-    func trustLines() -> [TrustLine] {
-        try! dbPool.read { db in
+    func trustLines() throws -> [TrustLine] {
+        try dbPool.read { db in
             try TrustLine.order(TrustLine.Columns.currency, TrustLine.Columns.issuer).fetchAll(db)
         }
     }
@@ -97,8 +97,8 @@ extension MainStorage: IMainStorage {
         }
     }
 
-    func transactionSyncState() -> TransactionSyncState? {
-        try! dbPool.read { db in
+    func transactionSyncState() throws -> TransactionSyncState? {
+        try dbPool.read { db in
             try TransactionSyncState.fetchOne(db)
         }
     }

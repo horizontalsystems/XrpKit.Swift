@@ -67,14 +67,14 @@ extension TransactionStorage: ITransactionStorage {
         }
     }
 
-    func transaction(hash: String) -> Transaction? {
-        try! dbPool.read { db in
+    func transaction(hash: String) throws -> Transaction? {
+        try dbPool.read { db in
             try Transaction.filter(Transaction.Columns.hash == hash).fetchOne(db)
         }
     }
 
-    func pendingTransactions() -> [Transaction] {
-        try! dbPool.read { db in
+    func pendingTransactions() throws -> [Transaction] {
+        try dbPool.read { db in
             try Transaction
                 .filter(Transaction.Columns.validated == false && Transaction.Columns.failed == false)
                 .order(Transaction.Columns.timestamp)
@@ -82,8 +82,8 @@ extension TransactionStorage: ITransactionStorage {
         }
     }
 
-    func oldestValidatedTransaction() -> Transaction? {
-        try! dbPool.read { db in
+    func oldestValidatedTransaction() throws -> Transaction? {
+        try dbPool.read { db in
             try Transaction
                 .filter(Transaction.Columns.validated == true && Transaction.Columns.ledgerIndex != nil)
                 .order(Transaction.Columns.ledgerIndex.asc)
@@ -91,12 +91,12 @@ extension TransactionStorage: ITransactionStorage {
         }
     }
 
-    func allTransactions() -> [Transaction] {
-        transactions(tagQuery: TagQuery(), fromHash: nil, limit: nil)
+    func allTransactions() throws -> [Transaction] {
+        try transactions(tagQuery: TagQuery(), fromHash: nil, limit: nil)
     }
 
-    func transactions(tagQuery: TagQuery, fromHash: String?, limit: Int?) -> [Transaction] {
-        try! dbPool.read { db in
+    func transactions(tagQuery: TagQuery, fromHash: String?, limit: Int?) throws -> [Transaction] {
+        try dbPool.read { db in
             var conditions = [String]()
             var arguments = [DatabaseValueConvertible]()
 

@@ -31,16 +31,16 @@ final class SyncManager {
 
     private var tasks = Set<AnyTask>()
 
-    init(address: String, apiSyncer: ApiSyncer, rpcApiProvider: RpcApiProvider, transactionSyncer: TransactionSyncer, storage: IMainStorage) {
+    init(address: String, apiSyncer: ApiSyncer, rpcApiProvider: RpcApiProvider, transactionSyncer: TransactionSyncer, storage: IMainStorage) throws {
         self.address = address
         self.apiSyncer = apiSyncer
         self.rpcApiProvider = rpcApiProvider
         self.transactionSyncer = transactionSyncer
         self.storage = storage
 
-        ledgerState = storage.ledgerState()
-        accountState = storage.accountState() ?? .empty
-        trustLines = storage.trustLines()
+        ledgerState = try storage.ledgerState()
+        accountState = try storage.accountState() ?? .empty
+        trustLines = try storage.trustLines()
 
         apiSyncer.delegate = self
     }

@@ -37,7 +37,7 @@ final class TransactionSyncerTests: XCTestCase {
 
         try await syncer.sync(validatedLedger: 1000, accountExists: true)
 
-        XCTAssertEqual(Set(transactionStorage.allTransactions().map(\.hash)), ["A", "B", "C"])
+        XCTAssertEqual(Set(try transactionStorage.allTransactions().map(\.hash)), ["A", "B", "C"])
         let state = try XCTUnwrap(mainStorage.transactionSyncState())
         XCTAssertTrue(state.initialSyncDone)
         XCTAssertEqual(state.lastSyncedLedger, 1000)
@@ -60,8 +60,8 @@ final class TransactionSyncerTests: XCTestCase {
             XCTFail("expected the second page to fail")
         } catch {}
 
-        XCTAssertEqual(Set(transactionStorage.allTransactions().map(\.hash)), ["A", "B"], "the first page is kept")
-        XCTAssertEqual(mainStorage.transactionSyncState()?.initialSyncDone, false)
+        XCTAssertEqual(Set(try transactionStorage.allTransactions().map(\.hash)), ["A", "B"], "the first page is kept")
+        XCTAssertEqual(try mainStorage.transactionSyncState()?.initialSyncDone, false)
         XCTAssertTrue(syncer.syncState.notSynced)
 
         // next cycle: the ledger moved on and one more page of old history exists; the resumed walk
@@ -74,7 +74,7 @@ final class TransactionSyncerTests: XCTestCase {
 
         try await syncer.sync(validatedLedger: 1010, accountExists: true)
 
-        XCTAssertEqual(Set(transactionStorage.allTransactions().map(\.hash)), ["A", "B", "C", "D"])
+        XCTAssertEqual(Set(try transactionStorage.allTransactions().map(\.hash)), ["A", "B", "C", "D"])
         let calls = transport.calls(method: "account_tx")
         XCTAssertEqual(calls[2].params["ledger_index_max"] as? Int64, 800, "resumes from the oldest stored ledger")
         XCTAssertEqual(calls[3].params["ledger_index_min"] as? Int64, 1001, "then fills forward from the ledger the walk started at")
@@ -94,7 +94,7 @@ final class TransactionSyncerTests: XCTestCase {
         XCTAssertEqual(call.params["ledger_index_min"] as? Int64, 1001)
         XCTAssertEqual(call.params["ledger_index_max"] as? Int64, 1005)
         XCTAssertEqual(call.params["forward"] as? Bool, true)
-        XCTAssertEqual(mainStorage.transactionSyncState()?.lastSyncedLedger, 1005)
+        XCTAssertEqual(try mainStorage.transactionSyncState()?.lastSyncedLedger, 1005)
 
         try await syncer.sync(validatedLedger: 1005, accountExists: true)
         XCTAssertEqual(transport.calls(method: "account_tx").count, 1, "nothing to fetch when the ledger did not move")
@@ -110,7 +110,7 @@ final class TransactionSyncerTests: XCTestCase {
         } catch is InvalidResponse {
             XCTAssertEqual(transport.calls(method: "account_tx").count, TransactionSyncer.maxPages)
         }
-        XCTAssertEqual(mainStorage.transactionSyncState()?.lastSyncedLedger, 1000, "cursor is not advanced")
+        XCTAssertEqual(try mainStorage.transactionSyncState()?.lastSyncedLedger, 1000, "cursor is not advanced")
     }
 
     func testPendingExpiresOnlyOnExplicitTxnNotFound() async throws {
@@ -138,7 +138,7 @@ final class TransactionSyncerTests: XCTestCase {
         let expired = try XCTUnwrap(transactionStorage.transaction(hash: "P"))
         XCTAssertTrue(expired.failed)
         XCTAssertEqual(expired.result, Transaction.expiredResult)
-        XCTAssertTrue(transactionStorage.pendingTransactions().isEmpty)
+        XCTAssertTrue(try transactionStorage.pendingTransactions().isEmpty)
     }
 
     func testValidatedRecordReplacesPending() async throws {
@@ -153,11 +153,11 @@ final class TransactionSyncerTests: XCTestCase {
         transport.answer("account_tx", .ok(Fixtures.accountTxPage([Fixtures.payment(hash: "Q", ledgerIndex: 1003, from: Fixtures.address, to: Fixtures.other, drops: "1")])))
         try await syncer.sync(validatedLedger: 1005, accountExists: true)
 
-        let stored = transactionStorage.allTransactions()
+        let stored = try transactionStorage.allTransactions()
         XCTAssertEqual(stored.count, 1)
         XCTAssertTrue(stored[0].validated)
         XCTAssertEqual(stored[0].ledgerIndex, 1003)
-        XCTAssertTrue(transactionStorage.pendingTransactions().isEmpty)
+        XCTAssertTrue(try transactionStorage.pendingTransactions().isEmpty)
     }
 
     // Paging from a hash that is no longer stored must not restart from the top: the list would
@@ -166,8 +166,8 @@ final class TransactionSyncerTests: XCTestCase {
         transport.answer("account_tx", .ok(Fixtures.accountTxPage([Fixtures.payment(hash: "A", ledgerIndex: 900, date: 800_000_100), Fixtures.payment(hash: "B", ledgerIndex: 800, date: 800_000_000)])))
         try await syncer.sync(validatedLedger: 1000, accountExists: true)
 
-        XCTAssertEqual(transactionStorage.transactions(tagQuery: TagQuery(), fromHash: "A", limit: 10).map(\.hash), ["B"])
-        XCTAssertTrue(transactionStorage.transactions(tagQuery: TagQuery(), fromHash: "GONE", limit: 10).isEmpty)
+        XCTAssertEqual(try transactionStorage.transactions(tagQuery: TagQuery(), fromHash: "A", limit: 10).map(\.hash), ["B"])
+        XCTAssertTrue(try transactionStorage.transactions(tagQuery: TagQuery(), fromHash: "GONE", limit: 10).isEmpty)
     }
 
     func testTagQueryFiltersAndPaging() throws {
@@ -180,13 +180,13 @@ final class TransactionSyncerTests: XCTestCase {
         ]
         try transactionStorage.save(transactions: records)
 
-        XCTAssertEqual(transactionStorage.allTransactions().map(\.hash), ["4", "3", "2", "1"])
-        XCTAssertEqual(transactionStorage.transactions(tagQuery: TagQuery(token: .native), fromHash: nil, limit: nil).map(\.hash), ["4", "3", "1"])
-        XCTAssertEqual(transactionStorage.transactions(tagQuery: TagQuery(token: .issued(currency: "USD", issuer: Fixtures.issuer)), fromHash: nil, limit: nil).map(\.hash), ["3", "2"])
-        XCTAssertEqual(transactionStorage.transactions(tagQuery: TagQuery(direction: .incoming), fromHash: nil, limit: nil).map(\.hash), ["1"])
-        XCTAssertEqual(transactionStorage.transactions(tagQuery: TagQuery(direction: .outgoing, token: .native), fromHash: nil, limit: nil).map(\.hash), ["4", "3"])
-        XCTAssertEqual(transactionStorage.transactions(tagQuery: TagQuery(address: Fixtures.other), fromHash: nil, limit: nil).map(\.hash), ["4", "2", "1"])
-        XCTAssertEqual(transactionStorage.transactions(tagQuery: TagQuery(), fromHash: "3", limit: 1).map(\.hash), ["2"])
-        XCTAssertEqual(transactionStorage.oldestValidatedTransaction()?.hash, "1")
+        XCTAssertEqual(try transactionStorage.allTransactions().map(\.hash), ["4", "3", "2", "1"])
+        XCTAssertEqual(try transactionStorage.transactions(tagQuery: TagQuery(token: .native), fromHash: nil, limit: nil).map(\.hash), ["4", "3", "1"])
+        XCTAssertEqual(try transactionStorage.transactions(tagQuery: TagQuery(token: .issued(currency: "USD", issuer: Fixtures.issuer)), fromHash: nil, limit: nil).map(\.hash), ["3", "2"])
+        XCTAssertEqual(try transactionStorage.transactions(tagQuery: TagQuery(direction: .incoming), fromHash: nil, limit: nil).map(\.hash), ["1"])
+        XCTAssertEqual(try transactionStorage.transactions(tagQuery: TagQuery(direction: .outgoing, token: .native), fromHash: nil, limit: nil).map(\.hash), ["4", "3"])
+        XCTAssertEqual(try transactionStorage.transactions(tagQuery: TagQuery(address: Fixtures.other), fromHash: nil, limit: nil).map(\.hash), ["4", "2", "1"])
+        XCTAssertEqual(try transactionStorage.transactions(tagQuery: TagQuery(), fromHash: "3", limit: 1).map(\.hash), ["2"])
+        XCTAssertEqual(try transactionStorage.oldestValidatedTransaction()?.hash, "1")
     }
 }

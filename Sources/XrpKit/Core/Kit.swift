@@ -155,24 +155,28 @@ public class Kit {
         trustLines.first { $0.currency == currency && $0.issuer == issuer }?.balance
     }
 
-    public func transactions(tagQuery: TagQuery = TagQuery(), fromHash: String? = nil, limit: Int? = nil) -> [Transaction] {
-        transactionStorage.transactions(tagQuery: tagQuery, fromHash: fromHash, limit: limit)
+    public func transactions(tagQuery: TagQuery = TagQuery(), fromHash: String? = nil, limit: Int? = nil) throws -> [Transaction] {
+        try transactionStorage.transactions(tagQuery: tagQuery, fromHash: fromHash, limit: limit)
     }
 
-    public func allTransactions() -> [Transaction] {
-        transactionStorage.allTransactions()
+    public func allTransactions() throws -> [Transaction] {
+        try transactionStorage.allTransactions()
     }
 
-    public func transaction(hash: String) -> Transaction? {
-        transactionStorage.transaction(hash: hash)
+    public func transaction(hash: String) throws -> Transaction? {
+        try transactionStorage.transaction(hash: hash)
     }
 
-    public func pendingTransactions() -> [Transaction] {
-        transactionStorage.pendingTransactions()
+    public func pendingTransactions() throws -> [Transaction] {
+        try transactionStorage.pendingTransactions()
     }
 
     public func statusInfo() -> [(String, Any)] {
-        [
+        // the debug dump is the one reader that must survive a broken database: it is where someone
+        // looks to find out what is wrong with it
+        let pending: Any = (try? pendingTransactions().count) ?? "unreadable"
+
+        return [
             ("Started", started),
             ("Address", address),
             ("Network", network.rawValue),
@@ -184,7 +188,7 @@ public class Kit {
             ("Balance", balance.xrplString),
             ("Reserve", minimumBalance.xrplString),
             ("Trust Lines", trustLines.count),
-            ("Pending Transactions", pendingTransactions().count),
+            ("Pending Transactions", pending),
         ]
     }
 
@@ -360,7 +364,7 @@ public extension Kit {
 
         let transactionSyncer = TransactionSyncer(address: classic, rpcApiProvider: rpcApiProvider, mainStorage: mainStorage, transactionStorage: transactionStorage)
         let apiSyncer = ApiSyncer(connectionManager: ReachabilityManager(), syncInterval: syncInterval)
-        let syncManager = SyncManager(address: classic, apiSyncer: apiSyncer, rpcApiProvider: rpcApiProvider, transactionSyncer: transactionSyncer, storage: mainStorage)
+        let syncManager = try SyncManager(address: classic, apiSyncer: apiSyncer, rpcApiProvider: rpcApiProvider, transactionSyncer: transactionSyncer, storage: mainStorage)
         let submitter = TransactionSubmitter(rpcApiProvider: rpcApiProvider, logger: logger)
         let transactionSender = TransactionSender(address: classic, rpcApiProvider: rpcApiProvider, submitter: submitter, storage: transactionStorage, transactionSyncer: transactionSyncer)
 
