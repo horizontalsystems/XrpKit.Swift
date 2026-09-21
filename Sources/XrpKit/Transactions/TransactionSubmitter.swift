@@ -2,12 +2,17 @@ import Foundation
 import HsToolKit
 
 /// Submission with node fallback: the same signed payload is offered to the endpoints in turn,
-/// starting from the provider's preferred one, until a node accepts it or gives a deterministic
-/// rejection. When every node is unreachable or ambiguous the outcome is `unknown`, never a
-/// rejection — the caller keeps its pending record and lets the ledger decide.
+/// starting from the provider's preferred one and wrapping around the list, until a node accepts it
+/// or gives a deterministic rejection. When every attempt is unreachable or ambiguous the outcome is
+/// `unknown`, never a rejection — the caller keeps its pending record and lets the ledger decide.
 ///
-/// Generic over the request and classifier so a second kit can reuse it.
+/// The number of attempts is bounded, and deliberately small. An endpoint that has gone dark costs a
+/// full request timeout, while the payload itself is only valid until its `LastLedgerSequence`, about
+/// a minute after signing; attempts beyond that window would offer the network a transaction it can
+/// no longer include, and leave the user waiting for them. A single-endpoint list is tried once.
 final class TransactionSubmitter {
+    /// One fallback after the chosen node, as the app configures it.
+    static let defaultMaxAttempts = 2
     enum Outcome<T> {
         case accepted(T)
         case rejected(engineResult: String, message: String?)
@@ -15,10 +20,12 @@ final class TransactionSubmitter {
     }
 
     private let rpcApiProvider: RpcApiProvider
+    private let maxAttempts: Int
     private let logger: Logger?
 
-    init(rpcApiProvider: RpcApiProvider, logger: Logger? = nil) {
+    init(rpcApiProvider: RpcApiProvider, maxAttempts: Int = TransactionSubmitter.defaultMaxAttempts, logger: Logger? = nil) {
         self.rpcApiProvider = rpcApiProvider
+        self.maxAttempts = maxAttempts
         self.logger = logger
     }
 
@@ -27,7 +34,9 @@ final class TransactionSubmitter {
         let start = rpcApiProvider.preferredIndex
         var lastError: Error?
 
-        for attempt in urls.indices {
+        // never more attempts than there are endpoints: re-offering the payload to a node that has
+        // just refused it adds a timeout, not a chance
+        for attempt in 0 ..< min(maxAttempts, urls.count) {
             let url = urls[(start + attempt) % urls.count]
             let nodeVerdict: SubmitVerdict
             let result: T?

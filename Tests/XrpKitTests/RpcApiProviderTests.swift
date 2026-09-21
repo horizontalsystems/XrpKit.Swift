@@ -40,6 +40,18 @@ final class RpcApiProviderTests: XCTestCase {
         XCTAssertEqual(transport.calls.count, 1)
     }
 
+    // `tooBusy` says nothing about the request, so the next node gets it - otherwise one loaded
+    // node stalls the whole sync and every send that has to read the sequence first.
+    func testNodeErrorFailsOverToTheNextEndpoint() async throws {
+        transport.answer(url: urls[0], "server_state", .rpcError(code: "tooBusy", message: "The server is too busy."))
+        transport.answer(url: urls[1], "server_state", .ok(Fixtures.serverState(validated: 77)))
+
+        let state = try await provider.serverState()
+
+        XCTAssertEqual(state.validatedLedger, 77)
+        XCTAssertEqual(transport.calls.map(\.url), [urls[0], urls[1]])
+    }
+
     func testActNotFoundMapsToNil() async throws {
         transport.answer("account_info", .rpcError(code: "actNotFound"))
         let info = try await provider.accountInfo(address: Fixtures.address)

@@ -21,9 +21,10 @@ final class NetworkManagerRpcTransport: IRpcTransport {
 }
 
 /// rippled JSON-RPC client with endpoint failover, the Android `RpcProvider` policy: transport and
-/// HTTP failures move to the next URL; a well-formed rippled error (e.g. `actNotFound`) is thrown
-/// as `RpcError` without failover, because every node would answer the same; a `warning: "load"`
-/// moves `preferredIndex` to the next node for subsequent calls.
+/// HTTP failures move to the next URL; a rippled error about the request itself (e.g. `actNotFound`)
+/// is thrown as `RpcError` without failover, because every node would answer the same, while one
+/// about the node's own condition (`tooBusy`, `notSynced`) moves on like a transport failure;
+/// a `warning: "load"` moves `preferredIndex` to the next node for subsequent calls.
 final class RpcApiProvider {
     private static let passes = 2
     private static let dnsRetryDelay: TimeInterval = 1.5
@@ -81,7 +82,7 @@ final class RpcApiProvider {
                 let index = (start + attempt) % urls.count
                 do {
                     return try await fetch(rpc: rpc, index: index)
-                } catch let error as RpcError {
+                } catch let error as RpcError where error.isDeterministic {
                     throw error
                 } catch is CancellationError {
                     throw CancellationError()

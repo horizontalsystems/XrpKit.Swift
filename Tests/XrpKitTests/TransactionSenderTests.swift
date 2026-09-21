@@ -63,7 +63,7 @@ final class TransactionSenderTests: XCTestCase {
         XCTAssertEqual(transaction.feeDrops, 12)
         XCTAssertEqual(transaction.destinationTag, 42)
         XCTAssertEqual(transaction.memo, "hi")
-        XCTAssertEqual(transactionStorage.transaction(hash: transaction.hash)?.hash, transaction.hash)
+        XCTAssertEqual(try transactionStorage.transaction(hash: transaction.hash)?.hash, transaction.hash)
         XCTAssertEqual(published.flatMap { $0 }.map(\.hash), [transaction.hash])
         XCTAssertEqual(submitBlobs().count, 1)
     }
@@ -79,23 +79,35 @@ final class TransactionSenderTests: XCTestCase {
         } catch {
             XCTFail("unexpected \(error)")
         }
-        XCTAssertTrue(transactionStorage.pendingTransactions().isEmpty)
-        XCTAssertTrue(transactionStorage.allTransactions().isEmpty)
+        XCTAssertTrue(try transactionStorage.pendingTransactions().isEmpty)
+        XCTAssertTrue(try transactionStorage.allTransactions().isEmpty)
         XCTAssertTrue(published.isEmpty)
         XCTAssertEqual(submitBlobs().count, 1, "a deterministic rejection is not retried on other nodes")
     }
 
     func testNodeLocalFailureFallsBackWithTheSameBlob() async throws {
         transport.answer(url: urls[0], "submit", .rpcError(code: "tooBusy"))
-        transport.answer(url: urls[1], "submit", .ok(["engine_result": "telINSUF_FEE_P", "engine_result_code": -394]))
-        transport.answer(url: urls[2], "submit", .ok(["engine_result": "terQUEUED", "engine_result_code": -89, "queued": true]))
+        transport.answer(url: urls[1], "submit", .ok(["engine_result": "terQUEUED", "engine_result_code": -89, "queued": true]))
 
         let transaction = try await send()
 
         let blobs = submitBlobs()
-        XCTAssertEqual(blobs.count, 3)
+        XCTAssertEqual(blobs.count, 2)
         XCTAssertEqual(Set(blobs).count, 1, "the very same signed blob goes to every node")
         XCTAssertTrue(try XCTUnwrap(transactionStorage.transaction(hash: transaction.hash)).isPending)
+    }
+
+    // `ter*` is "not now, maybe in a few ledgers": the node holds the blob, so dropping the record
+    // and reporting a failure invites a retry that pays twice once the held one lands.
+    func testRetriableResultKeepsPendingAndDoesNotThrow() async throws {
+        transport.answer("submit", .ok(["engine_result": "terINSUF_FEE_B", "engine_result_message": "Fee insufficient."]))
+
+        let pending = try await sender.sendPayment(signer: signer, destination: Fixtures.other, amount: .xrp(drops: 1_000_000), destinationTag: nil, memo: nil)
+
+        XCTAssertFalse(pending.validated)
+        XCTAssertFalse(pending.failed)
+        XCTAssertEqual(try transactionStorage.allTransactions().map(\.hash), [pending.hash])
+        XCTAssertEqual(published.last?.map(\.hash), [pending.hash])
     }
 
     func testSilenceOnEveryNodeKeepsPendingRecord() async throws {
@@ -106,14 +118,13 @@ final class TransactionSenderTests: XCTestCase {
         let transaction = try await send()
 
         XCTAssertTrue(try XCTUnwrap(transactionStorage.transaction(hash: transaction.hash)).isPending, "unknown outcome is not a rejection")
-        XCTAssertEqual(submitBlobs().count, 3)
+        XCTAssertEqual(submitBlobs().count, TransactionSubmitter.defaultMaxAttempts, "the walk stops at the attempt limit, not at the end of the list")
         XCTAssertEqual(published.flatMap { $0 }.map(\.hash), [transaction.hash])
     }
 
     func testPastSequenceAfterSilenceIsUnknownNotRejected() async throws {
         transport.answer(url: urls[0], "submit", .error(URLError(.networkConnectionLost)))
         transport.answer(url: urls[1], "submit", .ok(["engine_result": "tefPAST_SEQ", "engine_result_code": -190]))
-        transport.answer(url: urls[2], "submit", .ok(["engine_result": "tefPAST_SEQ", "engine_result_code": -190]))
 
         let transaction = try await send()
         XCTAssertTrue(try XCTUnwrap(transactionStorage.transaction(hash: transaction.hash)).isPending)
@@ -126,6 +137,64 @@ final class TransactionSenderTests: XCTestCase {
         let transaction = try await send()
         XCTAssertTrue(try XCTUnwrap(transactionStorage.transaction(hash: transaction.hash)).isPending)
         XCTAssertEqual(submitBlobs().count, 2, "tefALREADY stops the loop")
+    }
+
+    // rippled reports "I am busy / not synced / broken" with the same envelope as "your request is
+    // wrong"; treating the first as a rejection let one sick node fail every send in the wallet.
+    func testNodeErrorOnSubmitMovesToTheNextNode() async throws {
+        transport.answer(url: urls[0], "submit", .rpcError(code: "internal", message: "Internal error."))
+        transport.answer(url: urls[1], "submit", .ok(["engine_result": "tesSUCCESS", "engine_result_code": 0]))
+
+        let transaction = try await send()
+
+        XCTAssertEqual(submitBlobs().count, 2)
+        XCTAssertEqual(try transactionStorage.allTransactions().map(\.hash), [transaction.hash])
+    }
+
+    // the other half of the same rule: a complaint about the blob itself is not worth re-asking.
+    func testMalformedTransactionIsRejectedWithoutFailover() async throws {
+        for url in urls {
+            transport.answer(url: url, "submit", .rpcError(code: "invalidTransaction", message: "Invalid transaction."))
+        }
+
+        do {
+            _ = try await send()
+            XCTFail("expected a rejection")
+        } catch let error as SendError {
+            XCTAssertEqual(error, .rejected(engineResult: "invalidTransaction", message: "Invalid transaction."))
+        }
+
+        XCTAssertEqual(submitBlobs().count, 1)
+        XCTAssertTrue(try transactionStorage.allTransactions().isEmpty, "the record is dropped with the rejection")
+    }
+
+    // the chosen node leads, and the walk wraps around the list from there
+    func testAttemptsStartAtTheChosenNodeAndWrapAround() async throws {
+        provider.preferredIndex = 2
+        for url in urls {
+            transport.answer(url: url, "submit", .error(URLError(.timedOut)))
+        }
+
+        _ = try await send()
+
+        let visited = transport.calls(method: "submit").map(\.url)
+        XCTAssertEqual(visited, [urls[2], urls[0]])
+    }
+
+    // one endpoint is offered the payload once: a node that just timed out has no second chance to give
+    func testSingleEndpointIsTriedOnce() async throws {
+        let single = [urls[0]]
+        let provider = RpcApiProvider(urls: single, transport: transport)
+        let sender = TransactionSender(
+            address: address, rpcApiProvider: provider, submitter: TransactionSubmitter(rpcApiProvider: provider),
+            storage: transactionStorage, transactionSyncer: transactionSyncer
+        )
+        transport.answer(url: urls[0], "submit", .error(URLError(.timedOut)))
+
+        let transaction = try await sender.sendPayment(signer: signer, destination: Fixtures.other, amount: .xrp(drops: 1_000_000), destinationTag: nil, memo: nil)
+
+        XCTAssertEqual(submitBlobs().count, 1)
+        XCTAssertTrue(try XCTUnwrap(transactionStorage.transaction(hash: transaction.hash)).isPending)
     }
 
     func testConnectionRefusedIsNodeLocalNotUnknown() async throws {
@@ -167,7 +236,7 @@ final class TransactionSenderTests: XCTestCase {
         }
 
         XCTAssertTrue(transport.calls(method: "submit").isEmpty)
-        XCTAssertTrue(transactionStorage.allTransactions().isEmpty)
+        XCTAssertTrue(try transactionStorage.allTransactions().isEmpty)
     }
 }
 

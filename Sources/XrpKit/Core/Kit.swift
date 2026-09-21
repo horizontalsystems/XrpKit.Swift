@@ -347,7 +347,11 @@ public extension Kit {
         let classic = try AccountId.fromAddress(address).address
         let logger = Logger(minLogLevel: minLogLevel)
 
-        let networkManager = NetworkManager(logger: logger)
+        // deliberately unlogged, unlike SolanaKit and TronKit: `NetworkManager` prints the whole
+        // request body when a call fails, and for `submit` that body is the signed `tx_blob`
+        // (a signed blob, a signature or a key never goes to a log). The provider and the submitter log
+        // every failure themselves, with the method, the host and the error but no parameters.
+        let networkManager = NetworkManager()
         let rpcApiProvider = RpcApiProvider(urls: rpcUrls, networkManager: networkManager, logger: logger)
 
         let dbPool = try KitDatabase.pool(network: network, walletId: walletId)

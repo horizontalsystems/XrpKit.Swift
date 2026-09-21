@@ -25,27 +25,31 @@ struct XrpSubmitResultClassifier: ISubmitResultClassifier {
     private static let acceptedResults: Set<String> = ["terQUEUED", "tefALREADY"]
     /// The sequence was consumed: by this very transaction on another node, or by another one. Not decidable here.
     private static let ambiguousResults: Set<String> = ["tefPAST_SEQ"]
-    /// Node-local error tokens rippled returns with `status: error` for a submit it could not process.
-    private static let nodeLocalErrors: Set<String> = ["tooBusy", "noNetwork", "noCurrent", "noClosed", "highFee", "amendmentBlocked"]
+    /// `ter*` means "not now": the node holds the transaction and may apply it a few ledgers later,
+    /// so it is not decidable here either. Which of them can still resolve is not knowable from the
+    /// code alone, and the pending record expires past `LastLedgerSequence` within a minute anyway.
+    private static let retriablePrefix = "ter"
 
     func verdict(result: SubmitResult) -> SubmitVerdict {
         let code = result.engineResult
         if result.isSuccess || result.isQueued || Self.acceptedResults.contains(code) {
             return .accepted
         }
-        if Self.ambiguousResults.contains(code) {
+        if Self.ambiguousResults.contains(code) || code.hasPrefix(Self.retriablePrefix) {
             return .unknown(RpcError(code: code, message: result.engineResultMessage))
         }
         if code.hasPrefix("tel") {
             return .nodeLocal(RpcError(code: code, message: result.engineResultMessage))
         }
-        // tem*, tef*, tec*, ter* other than queued: the ledger rules said no
+        // tem*, tef*, tec*: the ledger rules said no, and every node would repeat it
         return .rejected(engineResult: code, message: result.engineResultMessage)
     }
 
     func verdict(error: Error) -> SubmitVerdict {
         if let rpcError = error as? RpcError {
-            return Self.nodeLocalErrors.contains(rpcError.code) ? .nodeLocal(rpcError) : .rejected(engineResult: rpcError.code, message: rpcError.message)
+            // a node that answers `tooBusy`, `notSynced` or `internal` has not read the blob, let
+            // alone relayed it; only a complaint about the request itself is worth stopping for
+            return rpcError.isDeterministic ? .rejected(engineResult: rpcError.code, message: rpcError.message) : .nodeLocal(rpcError)
         }
         if error is InvalidResponse {
             return .unknown(error)
