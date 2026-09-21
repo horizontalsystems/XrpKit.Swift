@@ -6,13 +6,24 @@ class AccountInfoJsonRpc: JsonRpc<AccountInfo> {
         super.init(method: "account_info", params: ["account": address, "ledger_index": "validated"])
     }
 
+    /// Each owned object locks an owner reserve increment, so a real account cannot hold anywhere
+    /// near this many. Bounded for the same reason as the reserve itself: the product feeds
+    /// `minimumBalance`.
+    static let maxOwnerCount: UInt32 = 1_000_000
+
     override func parse(result: RpcJson) throws -> AccountInfo {
         let data = try result.requireObject("account_data")
+        let ownerCount = try data.requireUInt32("OwnerCount")
+
+        guard ownerCount <= Self.maxOwnerCount else {
+            throw InvalidResponse("account_info: OwnerCount out of range")
+        }
+
         return AccountInfo(
             address: try data.requireString("Account"),
             balanceDrops: try data.requireDrops("Balance"),
             sequence: try data.requireUInt32("Sequence"),
-            ownerCount: try data.requireUInt32("OwnerCount"),
+            ownerCount: ownerCount,
             flags: try data.uint32("Flags") ?? 0
         )
     }

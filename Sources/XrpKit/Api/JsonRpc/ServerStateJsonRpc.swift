@@ -5,13 +5,26 @@ class ServerStateJsonRpc: JsonRpc<ServerState> {
         super.init(method: "server_state")
     }
 
+    /// Validators vote the reserve in units of XRP; it has never left single digits. A million XRP
+    /// is six orders of magnitude of headroom, and the bound is what keeps `minimumBalance` from
+    /// overflowing on a hostile or broken node — a value that lands in the database and would then
+    /// crash on every launch.
+    static let maxReserveDrops: UInt64 = 1_000_000_000_000
+
     override func parse(result: RpcJson) throws -> ServerState {
         let state = try result.requireObject("state")
         let ledger = try state.requireObject("validated_ledger")
+        let reserveBase = try ledger.requireUInt64("reserve_base")
+        let reserveInc = try ledger.requireUInt64("reserve_inc")
+
+        guard reserveBase <= Self.maxReserveDrops, reserveInc <= Self.maxReserveDrops else {
+            throw InvalidResponse("server_state: reserve out of range")
+        }
+
         return ServerState(
             validatedLedger: try ledger.requireUInt32("seq"),
-            reserveBaseDrops: try ledger.requireUInt64("reserve_base"),
-            reserveIncDrops: try ledger.requireUInt64("reserve_inc")
+            reserveBaseDrops: reserveBase,
+            reserveIncDrops: reserveInc
         )
     }
 }

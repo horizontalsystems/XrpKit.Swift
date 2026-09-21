@@ -58,7 +58,7 @@ actor TransactionSender {
             account: address,
             sequence: info.sequence,
             feeDrops: Self.feeDrops(fee),
-            lastLedgerSequence: serverState.validatedLedger + Self.lastLedgerOffset,
+            lastLedgerSequence: try Self.expiryLedger(validated: serverState.validatedLedger),
             signingPubKeyHex: signer.publicKey.xrpHex,
             memo: memo
         )
@@ -80,6 +80,18 @@ actor TransactionSender {
             try storage.delete(hash: signed.hash)
             throw SendError.rejected(engineResult: engineResult, message: message)
         }
+    }
+
+    /// The ledger past which the transaction can no longer be applied. A validated index close to
+    /// the field's ceiling can only come from a broken node, and the addition would trap.
+    private static func expiryLedger(validated: UInt32) throws -> UInt32 {
+        let (sum, overflow) = validated.addingReportingOverflow(lastLedgerOffset)
+
+        guard !overflow else {
+            throw InvalidResponse("server_state: validated ledger out of range")
+        }
+
+        return sum
     }
 
     private func pendingRecord(tx: [String: Any], hash: String, common: TransactionBuilder.Common) -> Transaction {

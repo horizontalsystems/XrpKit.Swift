@@ -89,6 +89,9 @@ final class RpcApiProviderTests: XCTestCase {
             ("Sequence above 32 bits", ["account_data": ["Account": Fixtures.address, "Balance": "1", "Sequence": 4_294_967_296, "OwnerCount": 0]]),
             ("Sequence negative", ["account_data": ["Account": Fixtures.address, "Balance": "1", "Sequence": -1, "OwnerCount": 0]]),
             ("Sequence fractional", ["account_data": ["Account": Fixtures.address, "Balance": "1", "Sequence": 1.5, "OwnerCount": 0]]),
+            // the reserve is `base + inc * ownerCount`: unbounded inputs trap, and the value would
+            // already be in the database, so the crash would repeat on every launch
+            ("OwnerCount absurd", ["account_data": ["Account": Fixtures.address, "Balance": "1", "Sequence": 1, "OwnerCount": 4_000_000_000]]),
             ("missing account_data", ["validated": true]),
         ]
 
@@ -107,6 +110,10 @@ final class RpcApiProviderTests: XCTestCase {
         transport.answer("server_state", .ok(["state": ["validated_ledger": ["seq": 10, "reserve_base": -1, "reserve_inc": 0]]]))
         let state = try? await provider.serverState()
         XCTAssertNil(state)
+
+        transport.answer("server_state", .ok(["state": ["server_state": "full", "validated_ledger": ["seq": 10, "reserve_base": UInt64.max, "reserve_inc": 200_000]]]))
+        let hugeReserve = try? await provider.serverState()
+        XCTAssertNil(hugeReserve)
 
         transport.answer("fee", .ok(["drops": ["base_fee": "1e9", "open_ledger_fee": "10", "minimum_fee": "10", "median_fee": "10"]]))
         let fee = try? await provider.fee()

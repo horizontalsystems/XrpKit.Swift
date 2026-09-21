@@ -60,7 +60,7 @@ final class TransactionSyncer {
             if accountExists {
                 if let state, state.initialSyncDone {
                     if validatedLedger > state.lastSyncedLedger {
-                        changed += try await incrementalSync(fromLedger: state.lastSyncedLedger + 1, toLedger: validatedLedger)
+                        changed += try await incrementalSync(fromLedger: state.lastSyncedLedger == .max ? .max : state.lastSyncedLedger + 1, toLedger: validatedLedger)
                     }
                 } else {
                     // the walk starts from the ledger it first saw; anything validated later is picked up by
