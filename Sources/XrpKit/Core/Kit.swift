@@ -226,16 +226,16 @@ public class Kit {
 
     /// Account details for any classic address, or nil when the account has never been funded.
     public func accountInfo(address: String) async throws -> AccountInfo? {
-        try await rpcApiProvider.accountInfo(address: AccountId.fromAddress(address).address)
+        try await Self.accountInfo(address: address, rpcApiProvider: rpcApiProvider)
     }
 
     public func doesAccountExist(address: String) async throws -> Bool {
-        try await accountInfo(address: address) != nil
+        try await Self.doesAccountExist(address: address, rpcApiProvider: rpcApiProvider)
     }
 
     /// True when the destination has the RequireDestTag flag: an untagged payment would fail.
     public func requiresDestinationTag(address: String) async throws -> Bool {
-        try await accountInfo(address: address)?.requiresDestinationTag ?? false
+        try await Self.requiresDestinationTag(address: address, rpcApiProvider: rpcApiProvider)
     }
 
     /// Whether `address` holds a trust line for the token (any limit or balance).
@@ -341,6 +341,47 @@ public extension Kit {
     /// Display form of a currency code: hex codes that spell printable text are decoded (RLUSD, USDC).
     static func displayCurrencyCode(_ code: String) -> String {
         CurrencyCodec.displayCode(code)
+    }
+}
+
+// MARK: - Wallet-free queries
+
+/// The destination lookups for an address no wallet holds, e.g. the recipient of a payment made from
+/// another chain. Static and independent of any Kit instance, like `NodePinger`; the instance
+/// methods of the same names answer the same way.
+public extension Kit {
+    /// Whether the classic `address` exists on the ledger, i.e. has ever been funded.
+    static func doesAccountExist(address: String, rpcUrls: [URL]) async throws -> Bool {
+        try await doesAccountExist(address: address, rpcApiProvider: rpcApiProvider(urls: rpcUrls))
+    }
+
+    /// True when the classic `address` has the RequireDestTag flag: an untagged payment would fail.
+    static func requiresDestinationTag(address: String, rpcUrls: [URL]) async throws -> Bool {
+        try await requiresDestinationTag(address: address, rpcApiProvider: rpcApiProvider(urls: rpcUrls))
+    }
+}
+
+extension Kit {
+    static func accountInfo(address: String, rpcApiProvider: RpcApiProvider) async throws -> AccountInfo? {
+        try await rpcApiProvider.accountInfo(address: AccountId.fromAddress(address).address)
+    }
+
+    static func doesAccountExist(address: String, rpcApiProvider: RpcApiProvider) async throws -> Bool {
+        try await accountInfo(address: address, rpcApiProvider: rpcApiProvider) != nil
+    }
+
+    static func requiresDestinationTag(address: String, rpcApiProvider: RpcApiProvider) async throws -> Bool {
+        try await accountInfo(address: address, rpcApiProvider: rpcApiProvider)?.requiresDestinationTag ?? false
+    }
+
+    private static func rpcApiProvider(urls: [URL]) throws -> RpcApiProvider {
+        // the provider traps on an empty list; here it is the caller's input, so it is an error instead
+        guard !urls.isEmpty else {
+            throw NoEndpointAvailable(underlying: nil)
+        }
+
+        // unlogged NetworkManager, as in `instance`
+        return RpcApiProvider(urls: urls, networkManager: NetworkManager(), logger: Logger(minLogLevel: .error))
     }
 }
 
