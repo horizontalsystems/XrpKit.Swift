@@ -3,9 +3,10 @@ import Foundation
 import HsToolKit
 
 /// One HTTP POST of a rippled command body to one endpoint. Abstracted so the provider's
-/// failover policy is testable without the network (StellarKit `IApi` idiom).
+/// failover policy is testable without the network (StellarKit `IApi` idiom). A nil `timeout` keeps
+/// the session's request timeout.
 protocol IRpcTransport {
-    func post(url: URL, body: RpcJson) async throws -> Any
+    func post(url: URL, body: RpcJson, timeout: TimeInterval?) async throws -> Any
 }
 
 final class NetworkManagerRpcTransport: IRpcTransport {
@@ -15,8 +16,8 @@ final class NetworkManagerRpcTransport: IRpcTransport {
         self.networkManager = networkManager
     }
 
-    func post(url: URL, body: RpcJson) async throws -> Any {
-        try await networkManager.fetchJson(url: url, method: .post, parameters: body, encoding: JSONEncoding.default, responseCacherBehavior: .doNotCache)
+    func post(url: URL, body: RpcJson, timeout: TimeInterval?) async throws -> Any {
+        try await networkManager.fetchJson(url: url, method: .post, parameters: body, encoding: JSONEncoding.default, responseCacherBehavior: .doNotCache, timeout: timeout)
     }
 }
 
@@ -105,7 +106,7 @@ final class RpcApiProvider {
     }
 
     private func fetch<T>(rpc: JsonRpc<T>, index: Int) async throws -> T {
-        let json = try await transport.post(url: urls[index], body: rpc.body)
+        let json = try await transport.post(url: urls[index], body: rpc.body, timeout: rpc.timeout)
         let parsed = try JsonRpcResponse.parse(method: rpc.method, jsonObject: json)
         preferredIndex = parsed.loadWarning ? (index + 1) % urls.count : index
         return try rpc.parse(result: parsed.result)

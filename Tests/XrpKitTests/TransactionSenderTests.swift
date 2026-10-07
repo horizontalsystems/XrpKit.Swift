@@ -68,6 +68,15 @@ final class TransactionSenderTests: XCTestCase {
         XCTAssertEqual(submitBlobs().count, 1)
     }
 
+    func testOnlySubmitOverridesTheSessionTimeout() async throws {
+        transport.answer("submit", .ok(["engine_result": "tesSUCCESS", "engine_result_code": 0, "accepted": true, "applied": true]))
+
+        _ = try await send()
+
+        XCTAssertEqual(transport.calls(method: "submit").map(\.timeout), [SubmitJsonRpc.timeout])
+        XCTAssertTrue(transport.calls.filter { $0.method != "submit" }.allSatisfy { $0.timeout == nil })
+    }
+
     func testDeterministicRejectionDropsPendingRecord() async {
         transport.answer("submit", .ok(["engine_result": "temBAD_AMOUNT", "engine_result_code": -298, "engine_result_message": "Malformed: Bad amount."]))
 

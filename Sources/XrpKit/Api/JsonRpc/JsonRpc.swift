@@ -5,10 +5,13 @@ import Foundation
 class JsonRpc<T> {
     let method: String
     let params: RpcJson
+    /// Overrides the session's request timeout for this call only; nil keeps the session's.
+    let timeout: TimeInterval?
 
-    init(method: String, params: RpcJson = [:]) {
+    init(method: String, params: RpcJson = [:], timeout: TimeInterval? = nil) {
         self.method = method
         self.params = params
+        self.timeout = timeout
     }
 
     var body: RpcJson {

@@ -10,6 +10,9 @@ public class Kit {
     public static let defaultOwnerReserveDrops: UInt64 = 200_000
     public static let defaultTrustLimit = Decimal(string: "1000000000000000")!
     public static let syncInterval: TimeInterval = 10
+    /// Session request timeout of every XRPL RPC call: a node that does not answer is left for the next
+    /// one after 10 s, not URLSession's 60 s. `submit` sets its own, longer timeout per request.
+    static let requestTimeout: TimeInterval = 10
 
     public let address: String
     public let network: Network
@@ -381,7 +384,7 @@ extension Kit {
         }
 
         // unlogged NetworkManager, as in `instance`
-        return RpcApiProvider(urls: urls, networkManager: NetworkManager(), logger: Logger(minLogLevel: .error))
+        return RpcApiProvider(urls: urls, networkManager: NetworkManager(timeout: requestTimeout), logger: Logger(minLogLevel: .error))
     }
 }
 
@@ -396,7 +399,7 @@ public extension Kit {
         // request body when a call fails, and for `submit` that body is the signed `tx_blob`
         // (a signed blob, a signature or a key never goes to a log). The provider and the submitter log
         // every failure themselves, with the method, the host and the error but no parameters.
-        let networkManager = NetworkManager()
+        let networkManager = NetworkManager(timeout: requestTimeout)
         let rpcApiProvider = RpcApiProvider(urls: rpcUrls, networkManager: networkManager, logger: logger)
 
         let dbPool = try KitDatabase.pool(network: network, walletId: walletId)

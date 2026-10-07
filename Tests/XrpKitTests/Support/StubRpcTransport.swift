@@ -18,6 +18,7 @@ final class StubRpcTransport: IRpcTransport {
         let url: URL
         let method: String
         let params: RpcJson
+        var timeout: TimeInterval?
 
         static func == (lhs: Call, rhs: Call) -> Bool {
             lhs.url == rhs.url && lhs.method == rhs.method && NSDictionary(dictionary: lhs.params).isEqual(to: rhs.params)
@@ -41,12 +42,12 @@ final class StubRpcTransport: IRpcTransport {
         queue.sync { calls.filter { $0.method == method } }
     }
 
-    func post(url: URL, body: RpcJson) async throws -> Any {
+    func post(url: URL, body: RpcJson, timeout: TimeInterval?) async throws -> Any {
         let method = body["method"] as? String ?? ""
         let params = (body["params"] as? [RpcJson])?.first ?? [:]
 
         let answer: Answer? = queue.sync {
-            calls.append(Call(url: url, method: method, params: params))
+            calls.append(Call(url: url, method: method, params: params, timeout: timeout))
             var pending = answersByUrl[url]?[method] ?? answers[method] ?? []
             let answer = pending.first
             if pending.count > 1 {

@@ -66,8 +66,11 @@ class TxJsonRpc: JsonRpc<TxResult> {
 }
 
 class SubmitJsonRpc: JsonRpc<SubmitResult> {
+    /// A node may take longer than the kit's 10 s request timeout to answer `submit` without being down.
+    static let timeout: TimeInterval = 30
+
     init(blobHex: String) {
-        super.init(method: "submit", params: ["tx_blob": blobHex, "fail_hard": false])
+        super.init(method: "submit", params: ["tx_blob": blobHex, "fail_hard": false], timeout: Self.timeout)
     }
 
     override func parse(result: RpcJson) throws -> SubmitResult {
