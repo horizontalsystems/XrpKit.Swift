@@ -55,6 +55,15 @@
       }
     },
     {
+      "identity" : "hstoolkit.swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/horizontalsystems/HsToolKit.Swift.git",
+      "state" : {
+        "revision" : "a6a4b12c3cfe57de8e3deb89bdb787ca96b99f28",
+        "version" : "2.0.7"
+      }
+    },
+    {
       "identity" : "objectmapper",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/tristanhimmelman/ObjectMapper.git",
